@@ -7,10 +7,8 @@ class TimeStamp extends StatefulWidget {
 
 class _TimeStampState extends State<TimeStamp> {
 
-  int hour = 0;
-  int minute = 0;
-  String ampm = "";
-  String time = ""; //time display string
+  String time; //time display string
+  int index = 0;
 
   List timestamps = new List<String>();
 
@@ -20,9 +18,7 @@ class _TimeStampState extends State<TimeStamp> {
 
   // get the current timestamp
   void sync(){
-      hour = getHour();
-      minute = getMinute();
-      ampm = getAMPM();
+      int hour = getHour();
 
       //convert from military time
       if(hour == 0)
@@ -31,12 +27,14 @@ class _TimeStampState extends State<TimeStamp> {
         hour -= 12;
 
       // time format: 00:00 XM
-      setTime(hour, minute, ampm);
+      setTime(hour, getMinute(), getAMPM());
 
       // save timestamp to list if not in list
-      if(timestamps.indexOf(time) == -1) {
+      if(timestamps.indexOf(time) == -1)
         timestamps.add(time);
-      }
+
+      // update index to match the sync'd time
+      index = timestamps.length - 1;
   }
 
   void updateText(bool isSync){
@@ -112,22 +110,23 @@ class _TimeStampState extends State<TimeStamp> {
   // Launches TimeEdit screen, awaits result from Navigator.pop
   // result is a list containing the hour, minute, and AM/PM
   _navigateEdit(BuildContext context) async {
-    int i = await Navigator.push(
+    index = await Navigator.push(
         context,
         MaterialPageRoute(
-            builder: (context) => TimestampSelect(timestamps)
+            builder: (context) => TimestampSelect(timestamps, index)
         )
     );
 
-    time = timestamps[i];
+    time = timestamps[index];
     updateText(false);
   }
 }
 
 class TimestampSelect extends StatefulWidget {
   final List<String> timestamps;
+  final int index;
 
-  const TimestampSelect (this.timestamps);
+  const TimestampSelect (this.timestamps, this.index);
 
   @override
   _TimestampSelectState createState() => _TimestampSelectState();
@@ -172,7 +171,7 @@ class _TimestampSelectState extends State<TimestampSelect> {
     // if user has not scrolled, the most recent saved timestamp is highlighted
     List<Widget> times = List.generate(widget.timestamps.length,
       (index) => Text(widget.timestamps[index],
-        style: (_currentTime == null && index == 0) || _currentTime == index ? _highlight : _style));
+        style: (_currentTime == null && index == widget.index) || _currentTime == index ? _highlight : _style));
 
     /* Remnant of modular design
     List<Widget> hourList = List<Widget>.generate(12, (index) => Text("${index + 1}",
@@ -197,7 +196,7 @@ class _TimestampSelectState extends State<TimestampSelect> {
             height:300,
             child: ListWheelScrollView(
               // set initial value to last timestamp value
-              controller: FixedExtentScrollController(initialItem: widget.timestamps.length - 1),
+              controller: FixedExtentScrollController(initialItem: widget.index),
               itemExtent: _style.fontSize,
               children: times,
               squeeze: 0.5,
@@ -278,6 +277,8 @@ class _TimestampSelectState extends State<TimestampSelect> {
                 List l = [_currentHour, _currentMinute, _currentAMPM];
                  */
 
+                if(_currentTime == null)
+                  _currentTime = widget.index;
                 Navigator.pop(context, _currentTime);
               }
           )

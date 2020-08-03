@@ -10,7 +10,7 @@ class _TimeStampState extends State<TimeStamp> {
   int hour = 0;
   int minute = 0;
   String ampm = "";
-  String time = "";
+  String time = ""; //time display string
 
   _TimeStampState(){
     sync(); //get timestamp on startup
@@ -19,6 +19,8 @@ class _TimeStampState extends State<TimeStamp> {
   // get the current timestamp
   void sync(){
       hour = getHour();
+      minute = getMinute();
+      ampm = getAMPM();
 
       //convert from military time
       if(hour == 0)
@@ -26,21 +28,25 @@ class _TimeStampState extends State<TimeStamp> {
       else if(hour > 12)
         hour -= 12;
 
-      minute = getMinute();
-      ampm = getAMPM();
-
       // time format: 00:00 XM
-      time = hour.toString() + ":"
-          + (minute < 10 ? "0" : "") + "" + minute.toString()
-          + " " + ampm;
+      setTime(hour, minute, ampm);
   }
 
-  void setText(bool isSync){
-    //update timestamp w/ current time
+  void updateText(bool isSync){
+    //update text w/ current timestamp
     setState(() {
-      if(isSync)
+      if(isSync) // only run sync() when Sync button is pressed
         sync();
+
     });
+  }
+
+  // set timestamp string to revised timestamp
+  // ran by sync() and _navigateEdit()
+  void setTime(int h, int m, String a){
+    time = h.toString() + ":"
+        + (m < 10 ? "0" : "") + "" + m.toString()
+        + " " + a;
   }
 
   int getHour(){
@@ -68,7 +74,7 @@ class _TimeStampState extends State<TimeStamp> {
 
         child: new Column(
           children: <Widget>[
-            Text(
+            Text( //Timestamp text
               "$time",
 
               style: TextStyle(
@@ -80,12 +86,12 @@ class _TimeStampState extends State<TimeStamp> {
             RaisedButton(
                 child: Text("Sync"),
                 onPressed: (){
-                  setText(true);
+                  updateText(true);
                 }
             ),
 
             RaisedButton(
-                child: Text("Edit"),
+                child: Text("Timestamps"),
                 onPressed: (){
                   _navigateEdit(context);
                 }
@@ -96,29 +102,49 @@ class _TimeStampState extends State<TimeStamp> {
   }
 
   // Launches TimeEdit screen, awaits result from Navigator.pop
+  // result is a list containing the hour, minute, and AM/PM
   _navigateEdit(BuildContext context) async {
-    time = await Navigator.push(
+    List l = await Navigator.push(
         context,
         MaterialPageRoute(
-            builder: (context) => TimeEdit()
+            builder: (context) => TimestampSelect(hour, minute)
         )
     );
 
-    setText(false);
+    hour = l[0];
+    minute = l[1];
+    ampm = l[2];
+
+    // time format: 00:00 XM
+    setTime(hour, minute, ampm);
+
+    updateText(false);
   }
 }
 
-class TimeEdit extends StatefulWidget {
+class TimestampSelect extends StatefulWidget {
+  final int hour;
+  final int minute;
+
+  const TimestampSelect (this.hour, this.minute);
+
   @override
-  _TimeEditState createState() => _TimeEditState();
+  _TimestampSelectState createState() => _TimestampSelectState();
 }
 
-class _TimeEditState extends State<TimeEdit> {
+class _TimestampSelectState extends State<TimestampSelect> {
 
   @override
   Widget build(BuildContext context) {
 
+    int finalHour = widget.hour;
+    int finalMinute = widget.minute;
+    String ampm = "AM";
     final _style = Theme.of(context).textTheme.headline3;
+
+    List<Widget> hourList = List<Widget>.generate(12, (index) => Text((index + widget.hour) % 12 == 0 ? "12" : "${(index + widget.hour) % 12} ", style: _style));
+    List<Widget> minuteList = List<Widget>.generate(60, (index) => Text("${(index + widget.minute) % 60}", style: _style));
+    List<Widget> ampmList =  [Text("AM", style: _style), Text("PM",  style: _style)];
 
     return Container(
       decoration: new BoxDecoration(
@@ -137,10 +163,15 @@ class _TimeEditState extends State<TimeEdit> {
                 child: ListWheelScrollView.useDelegate(
                   itemExtent: _style.fontSize,
                   childDelegate: ListWheelChildLoopingListDelegate(
-                    children: List<Widget>.generate(12, (index) => Text("${index + 1}", style: _style)),
+                    children: hourList,
                   ),
                   squeeze: 0.5,
-                )
+                  onSelectedItemChanged: (i) => {
+                    finalHour = (widget.hour + i) % 12,
+                    if(finalHour == 0)
+                      finalHour = 12,
+                  },
+                ),
               ),
               ConstrainedBox(
                   constraints: BoxConstraints(
@@ -150,9 +181,12 @@ class _TimeEditState extends State<TimeEdit> {
                   child: ListWheelScrollView.useDelegate(
                     itemExtent: _style.fontSize,
                     childDelegate: ListWheelChildLoopingListDelegate(
-                      children: List<Widget>.generate(60, (index) => Text("${index}", style: _style)),
+                      children: minuteList,
                     ),
                     squeeze: 0.5,
+                    onSelectedItemChanged: (i) => {
+                      finalMinute = (widget.minute + i) % 60
+                    },
                   )
               ),
               ConstrainedBox(
@@ -162,15 +196,21 @@ class _TimeEditState extends State<TimeEdit> {
                   ),
                   child: ListWheelScrollView(
                     itemExtent: _style.fontSize,
-                    children: [Text("AM", style: _style), Text("PM",  style: _style)]
+                    children: ampmList,
+                    onSelectedItemChanged: (i) => {
+                      ampm = (i == 0) ? "AM" : "PM"
+                    },
+                    squeeze: 0.5
                   )
               ),
           ]),
 
+          //Pass the selected time back to TimeStamp
           RaisedButton(
               child: Text("Save"),
               onPressed: (){
-                Navigator.pop(context, "test");
+                List l = [finalHour, finalMinute, ampm];
+                Navigator.pop(context, l);
               }
           )
         ],
